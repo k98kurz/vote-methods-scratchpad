@@ -329,12 +329,40 @@ def irv_coombs (candidates, ballots, quorum_requirement):
                 else:
                     exhausted_ballots += 1
             else:
-                if b[0] not in candidates or b[-1] not in candidates:
+                # handle ties
+                first_choices_valid = True
+                last_choices_valid = True
+                if type(b[0]) is list:
+                    for c in b[0]:
+                        if c not in candidates:
+                            first_choices_valid = False
+                elif b[0] not in candidates:
+                    first_choices_valid = False
+
+                if type(b[-1]) is list:
+                    for c in b[-1]:
+                        if c not in candidates:
+                            last_choices_valid = False
+                elif b[-1] not in candidates:
+                    last_choices_valid = False
+
+                if not first_choices_valid or not last_choices_valid:
                     invalid_ballots += 1
                 else:
                     counted_ballots.append(b)
-                    round_tally[b[0]] += 1
-                    round_tally_lowest_pref[b[-1]] += 1
+                    if type(b[0]) is list:
+                        for c in b[0]:
+                            round_tally[c] += 1
+                            # round_tally[c] += 1 / len(b[0])
+                    else:
+                        round_tally[b[0]] += 1
+
+                    if type(b[-1]) is list:
+                        for c in b[-1]:
+                            round_tally_lowest_pref[c] += 1
+                            # round_tally_lowest_pref[c] += 1 / len(b[-1])
+                    else:
+                        round_tally_lowest_pref[b[-1]] += 1
 
         # sort candidiates
         round_tally = sort_candidates(round_tally)
@@ -381,14 +409,27 @@ def irv_coombs (candidates, ballots, quorum_requirement):
         if len(candidates) == 0:
             break
 
-        # re-assign ballots
+        # remove eliminated candidates from ballots
         next_round_ballots = []
         for b in counted_ballots:
             ballot = []
-            for c in b:
-                # keep only votes for uneliminated candidates
-                if c not in eliminated_candidates:
-                    ballot.append(c)
+            for rank in b:
+                # traverse ties
+                if type(rank) is list:
+                    # remove eliminated candidates from rank
+                    nonrank = [c for c in rank if c in eliminated_candidates]
+                    for n in nonrank:
+                        rank.remove(n)
+                    # add to ballot
+                    if len(rank) == 1:
+                        ballot.append(rank[0])
+                    elif len(rank) > 1:
+                        ballot.append(rank)
+                else:
+                    # keep only votes for uneliminated candidates
+                    if rank not in eliminated_candidates:
+                        ballot.append(rank)
+
             # add to next round if the ballot is not exhausted
             if len(ballot) > 0:
                 next_round_ballots.append(ballot)
