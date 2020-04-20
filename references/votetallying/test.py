@@ -89,7 +89,9 @@ def normalize_ranked_ballots_coombs_no_ties(ballots, candidates):
     # return noramlized ballots and candidates list
     return ballots, candidates
 
-def normalize_ranked_ballots(ballots, candidates, placeholder = 'Unranked/Write-Ins/Other'):
+def normalize_ranked_ballots(ballots, candidates, placeholder = b'Unranked/Write-Ins/Other'):
+    new_ballots = []
+
     # get complete list of all candidates
     for b in ballots:
         found_ph = False
@@ -126,17 +128,13 @@ def normalize_ranked_ballots(ballots, candidates, placeholder = 'Unranked/Write-
                 unranked.append(c)
 
         # put unranked candidates on the ballot in place of Unranked/Write-Ins/Other as a tie
-        new_ballot = b[0:b.index(placeholder)]
-        new_ballot.append(unranked)
-        new_ballot[len(new_ballot):] = b[b.index(placeholder)+1:]
-        for i in range(0, len(new_ballot)):
-            if i < len(b):
-                b[i] = new_ballot[i]
-            else:
-                b.append(new_ballot[i])
+        nb = b[0:b.index(placeholder)]
+        nb.append(unranked)
+        nb[len(nb):] = b[b.index(placeholder)+1:]
+        new_ballots.append(nb)
 
     # return noramlized ballots and candidates list
-    return ballots, candidates
+    return new_ballots, candidates
 
 
 original_candidates = ['Albert', 'Billy', 'Cindy']
@@ -152,7 +150,9 @@ original_ballots = [
     ['Edmund', 'Sam'],
     ['Edmund'],
     ['Edmund'],
-    ['Unranked/Write-Ins/Other', 'Edmund']
+    # [b'Unranked/Write-Ins/Other', 'Edmund'],
+    # [b'Unranked/Write-Ins/Other', 'Edmund'],
+    [['Dilbert', 'Cindy'], 'Edmund']
 ]
 ballots = copy.deepcopy(original_ballots)
 candidates = original_candidates[:]
@@ -183,73 +183,18 @@ ballots, candidates = normalize_ranked_ballots(ballots, candidates)
 
 
 
-
-
-# print('IRV result after 10000 tallies (normal normalization):')
-# scores = {'b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':0}
-# for c in candidates:
-#     scores[c] = 0
-#
-# for i in range(0, 10000):
-#     ballots = copy.deepcopy(original_ballots)
-#     ballots, candidates = normalize_ranked_ballots(ballots, candidates)
-#     result = irv(candidates[:], ballots, 3)
-#     scores[result['winner']] += 1
-#
-# for c in candidates:
-#     print('     ', c, ':', scores[c])
-# print('      no winner:', scores['b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'])
-#
-# print('')
-#
-# print('IRV result after 10000 tallies (coombs normalization):')
-# scores = {'b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':0}
-# for c in candidates:
-#     scores[c] = 0
-#
-# for i in range(0, 10000):
-#     ballots = copy.deepcopy(original_ballots)
-#     ballots, candidates = normalize_ranked_ballots_coombs(ballots, candidates)
-#     result = irv(candidates[:], ballots, 3)
-#     scores[result['winner']] += 1
-#
-# for c in candidates:
-#     print('     ', c, ':', scores[c])
-# print('      no winner:', scores['b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'])
-#
-# print('')
-
-
-# ********************************************
-
-print('IRV Coomb\'s result after 100000 tallies (new normalization):')
-scores = {'b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':0}
-for c in candidates:
-    scores[c] = 0
-
-for i in range(0, 100000):
-    ballots = copy.deepcopy(original_ballots)
-    ballots, candidates = normalize_ranked_ballots(ballots, candidates)
-    result = irv_coombs(candidates[:], ballots, 3)
-    scores[result['winner']] += 1
-
-for c in candidates:
-    print('     ', c, ':', scores[c])
-print('      no winner:', scores['b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'])
-
-print('')
-
-# print('IRV Coomb\'s result after 100000 tallies (coombs normalization):')
-# scores = {'b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':0}
-# for c in candidates:
-#     scores[c] = 0
-#
-# for i in range(0, 100000):
-#     ballots = copy.deepcopy(original_ballots)
-#     ballots, candidates = normalize_ranked_ballots_coombs(ballots, candidates)
-#     result = irv_coombs(candidates[:], ballots, 3)
-#     scores[result['winner']] += 1
-#
-# for c in candidates:
-#     print('     ', c, ':', scores[c])
-# print('      no winner:', scores['b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'])
+ballots = copy.deepcopy(original_ballots)
+ballots, candidates = normalize_ranked_ballots(ballots, candidates)
+print('ballots: ')
+for b in ballots:
+    print('\t', b)
+result = irv(candidates[:], ballots, 3)
+# scores[result['winner']] += 1
+print('winner: ', result['winner'])
+print('valid_ballots: ', result['valid_ballots'])
+print('invalid_ballots: ', result['invalid_ballots'])
+print('exhausted_ballots: ', result['exhausted_ballots'])
+for t in result['tally']:
+    print('\ttally round:', t)
+    # print('\thighest-pref: ', t[0])
+    # print('\tlowest-pref: ', t[1])

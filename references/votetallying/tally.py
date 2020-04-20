@@ -27,35 +27,59 @@ def fisheryates(arr):
     return arr
 
 '''
-    Arguments: ballots list [ballot list,...], candidates list [candidate_hash bytes,...]
+    Arguments: ballots list [ballot list,...], candidates list [candidate_hash bytes,...], placeholder bytes
 
     This goes through each ballot, attaches any write-ins to the candidates list,
-    and puts unranked candidiates at the bottom of each ballot in a random order.
+    and replaces the placeholder with a tied rank of unranked candidiates.
 
     Output: ballots list, candidates list
 '''
-def normalize_ranked_ballots(ballots, candidates):
-    # add write-in candidates
+def normalize_ranked_ballots(ballots, candidates, placeholder = b'Unranked/Write-Ins/Other'):
+    new_ballots = []
+
+    # get complete list of all candidates
     for b in ballots:
-        for c in b:
-            if c not in candidates:
-                candidates.append(c)
+        found_ph = False
+        for rank in b:
+            # handle ties
+            if type(rank) is list:
+                for t in rank:
+                    if t not in candidates and t is not placeholder:
+                        candidates.append(t)
+                    elif t is placeholder:
+                        found_ph = True
+            else:
+                if rank not in candidates and rank is not placeholder:
+                    candidates.append(rank)
+                elif rank is placeholder:
+                    found_ph = True
+
+        # add write-in candidates in the Unranked/Write-Ins/Other slot
+        if not found_ph:
+            b.append(placeholder)
 
     for b in ballots:
         # compile unranked candidates
         unranked = []
         for c in candidates:
-            if c not in b:
+            # handle ties
+            found_c = False
+            for rank in b:
+                if type(rank) is list:
+                    if c in rank:
+                        found_c = True
+
+            if not found_c and c not in b:
                 unranked.append(c)
 
-        # shuffle unranked candidates
-        unranked = fisheryates(unranked)
-
-        # append unranked candidates to the ballot
-        b[len(b):] = unranked
+        # put unranked candidates on the ballot in place of Unranked/Write-Ins/Other as a tie
+        nb = b[0:b.index(placeholder)]
+        nb.append(unranked)
+        nb[len(nb):] = b[b.index(placeholder)+1:]
+        new_ballots.append(nb)
 
     # return noramlized ballots and candidates list
-    return ballots, candidates
+    return new_ballots, candidates
 
 '''
     Arguments:  number_of_winners int, candidates [hash bytes,...],
@@ -195,7 +219,7 @@ def irv (candidates, ballots, quorum_requirement):
         for c in candidates:
             round_tally[c] = 0
 
-        # go through each ballot and tally to its highest-preference candidate
+        # go through each ballot and tally its highest-preference candidates
         for b in ballots:
             if len(b) < 1:
                 if round == 0:
@@ -203,7 +227,15 @@ def irv (candidates, ballots, quorum_requirement):
                 else:
                     exhausted_ballots += 1
             else:
-                if b[0] not in candidates:
+                if type(b[0]) is list:
+                    if len([c for c in b[0] if c not in candidates]):
+                        invalid_ballots += 1
+                    else:
+                        for c in b[0]:
+                            # round_tally[c] += 1
+                            round_tally[c] += 1 / len(b[0])
+                        counted_ballots.append(b)
+                elif b[0] not in candidates:
                     invalid_ballots += 1
                 else:
                     counted_ballots.append(b)
@@ -233,16 +265,17 @@ def irv (candidates, ballots, quorum_requirement):
             if round_tally[c] < worst_candidate[1]:
                 worst_candidate = [c, round_tally[c]]
 
+        # stop if winner found
+        if winner_found:
+            break
+
         # check for ties for worst_candidate
         ties_for_worst = []
-        for c in round_tally:
-            if c != worst_candidate[0] and round_tally[c] == worst_candidate[1]:
-                ties_for_worst.append(c)
+        ties_for_worst.extend([c for c in round_tally if round_tally[c] == worst_candidate[1] and c != worst_candidate[0]])
 
         # eliminate worst_candidate and ties_for_worst
         eliminated_candidates.append(worst_candidate[0])
-        for i in range(0, len(ties_for_worst)):
-            eliminated_candidates.append(ties_for_worst[i])
+        eliminated_candidates.extend(ties_for_worst)
 
         # remove eliminated_candidates from candidates
         for c in eliminated_candidates:
@@ -253,22 +286,37 @@ def irv (candidates, ballots, quorum_requirement):
         if len(candidates) == 0:
             break
 
-        # re-assign ballots
+        # remove eliminated candidiates from ballots
+        # print('eliminated: ', eliminated_candidates)
         next_round_ballots = []
         for b in counted_ballots:
             ballot = []
-            for c in b:
-                # keep only votes for uneliminated candidates
-                if c not in eliminated_candidates:
-                    ballot.append(c)
+            for rank in b:
+                # traverse ties
+                if type(rank) is list:
+                    # remove eliminated candidates from rank
+                    nonrank = [c for c in rank if c in eliminated_candidates]
+                    for n in nonrank:
+                        rank.remove(n)
+                    # add to ballot
+                    if len(rank) == 1:
+                        ballot.append(rank[0])
+                    elif len(rank) > 1:
+                        ballot.append(rank)
+                else:
+                    # keep only votes for uneliminated candidates
+                    if rank not in eliminated_candidates:
+                        ballot.append(rank)
             # add to next round if the ballot is not exhausted
             if len(ballot) > 0:
+                # print('\tnewbal: ', ballot)
                 next_round_ballots.append(ballot)
             else:
                 exhausted_ballots += 1
 
         # set up for next round
         ballots = next_round_ballots
+        round += 1
 
     # final tabulations
     valid_ballots = total_ballots - invalid_ballots
@@ -290,7 +338,7 @@ def irv (candidates, ballots, quorum_requirement):
     preference votes.
 
     Output: dict {
-        tally:list [OrderedDict {candidate_hash:votes int}, ...],
+        tally:list [[OrderedDict highest_preference_votes {candidate_hash:votes int,...}, OrderedDict lowest_preference_votes {candidate_hash:votes int,...}], ...],
         winner:winner_hash bytes,
         invalid_ballots:int,
         valid_ballots:int,
@@ -321,13 +369,17 @@ def irv_coombs (candidates, ballots, quorum_requirement):
 
         # go through each ballot and tally its highest- and lowest-preference candidates
         for b in ballots:
-            if len(b) < len(candidates):
+            # count candidates in first round and reject invalid ballots
+            counted_candidates = 0
+            if round == 0:
+                for rank in b:
+                    if type(rank) is list:
+                        counted_candidates += len(rank)
+                    else:
+                        counted_candidates += 1
+
+            if round == 0 and counted_candidates < len(candidates):
                 invalid_ballots += 1
-            if len(b) < 1:
-                if round == 0:
-                    invalid_ballots += 1
-                else:
-                    exhausted_ballots += 1
             else:
                 # handle ties
                 first_choices_valid = True
@@ -352,15 +404,15 @@ def irv_coombs (candidates, ballots, quorum_requirement):
                     counted_ballots.append(b)
                     if type(b[0]) is list:
                         for c in b[0]:
-                            round_tally[c] += 1
-                            # round_tally[c] += 1 / len(b[0])
+                            # round_tally[c] += 1
+                            round_tally[c] += 1 / len(b[0])
                     else:
                         round_tally[b[0]] += 1
 
                     if type(b[-1]) is list:
                         for c in b[-1]:
-                            round_tally_lowest_pref[c] += 1
-                            # round_tally_lowest_pref[c] += 1 / len(b[-1])
+                            # round_tally_lowest_pref[c] += 1
+                            round_tally_lowest_pref[c] += 1 / len(b[-1])
                     else:
                         round_tally_lowest_pref[b[-1]] += 1
 
@@ -389,6 +441,10 @@ def irv_coombs (candidates, ballots, quorum_requirement):
             if round_tally_lowest_pref[c] > worst_candidate[1]:
                 worst_candidate = [c, round_tally_lowest_pref[c]]
 
+        # stop if winner found
+        if winner_found:
+            break
+
         # check for ties for worst_candidate
         ties_for_worst = []
         for c in round_tally_lowest_pref:
@@ -397,10 +453,10 @@ def irv_coombs (candidates, ballots, quorum_requirement):
 
         # eliminate worst_candidate and ties_for_worst
         eliminated_candidates.append(worst_candidate[0])
-        for i in range(0, len(ties_for_worst)):
-            eliminated_candidates.append(ties_for_worst[i])
+        eliminated_candidates.extend(ties_for_worst)
 
         # remove eliminated_candidates from candidates
+        # print('eliminated: ', eliminated_candidates)
         for c in eliminated_candidates:
             if c in candidates:
                 candidates.remove(c)
@@ -433,11 +489,13 @@ def irv_coombs (candidates, ballots, quorum_requirement):
             # add to next round if the ballot is not exhausted
             if len(ballot) > 0:
                 next_round_ballots.append(ballot)
+                # print('\tballot: ', ballot)
             else:
                 exhausted_ballots += 1
 
         # set up for next round
         ballots = next_round_ballots
+        round += 1
 
     # final tabulations
     valid_ballots = total_ballots - invalid_ballots
@@ -447,7 +505,6 @@ def irv_coombs (candidates, ballots, quorum_requirement):
 
     # return statement
     return {'tally': tally, 'winner': winner, 'invalid_ballots': invalid_ballots, 'valid_ballots': valid_ballots, 'exhausted_ballots': exhausted_ballots, 'meets_quorum': meets_quorum}
-
 
 '''
     Arguments:  candidates [hash bytes, ...],
