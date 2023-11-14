@@ -147,6 +147,12 @@ def get_control_code (char):
         b'\x0d' :   'PROPOSAL_SCHULZE',
         b'\x0e' :   'PROPOSAL_SORTITION',
         b'\x0f' :   'PROPOSAL_MMP',
+        # b'\x' :   'APPORTIONMENT_HUNTINGTON',
+        # b'\x' :   'APPORTIONMENT_WEBSTER',
+        # b'\x' :   'APPORTIONMENT_JEFFERSON',
+        # b'\x' :   'APPORTIONMENT_HAMILTON',
+        # b'\x' :   'APPORTIONMENT_ADAM',
+        # b'\x' :   'APPORTIONMENT_LOWNDES',
         b'\x10' :   'BALLOT_PLURALITY',
         b'\x11' :   'BALLOT_RANKED',
         b'\x12' :   'BALLOT_APPROVAL',
@@ -171,7 +177,10 @@ def get_control_code (char):
         b'\x25' :   'TRANSFER',
         b'\x26' :   'DELEGATE',
         b'\x2' :   '',
-        b'\x30' :   'OTHER'
+        b'\x30' :   'OTHER',
+        b'\x31' :   'INFORMATIONAL',
+        b'\x32' :   'ADVISORY',
+        b'\x33' :   'BINDING',
     }
 
     if not char in control_codes:

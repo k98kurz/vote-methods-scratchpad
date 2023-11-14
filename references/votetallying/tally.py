@@ -514,7 +514,8 @@ def irv_coombs (candidates, ballots, quorum_requirement):
 
     This uses the Droop quota rather than Hare:
         total_votes / (seats_available+1) + 1
-    Similar to irv, except surplus votes are distributed before eliminations.
+    Similar to irv, except surplus votes are distributed before eliminations using
+    the Gergory method (Irish Senatorial rules).
 
     Output: dict {
         tally:list [OrderedDict {candidate_hash:votes int}, ...],
@@ -525,4 +526,47 @@ def irv_coombs (candidates, ballots, quorum_requirement):
         meets_quorum:bool
     }
 '''
-# def stv (candidates, ballots, seats_available, quorum_requirement):
+def stv_droop (candidates, ballots, seats_available, quorum_requirement):
+    tally = []
+    elected_candidates = []
+    eliminated_candidates = []
+    total_ballots = len(ballots)
+    quota = int(total_ballots / (seats_available + 1)) + 1
+    invalid_ballots = 0
+    exhausted_ballots = 0
+    round = 0
+
+    while len(elected_candidates) < seats_available:
+        # set up round
+        round_tally = {}
+        counted_ballots = []
+        for c in candidates:
+            round_tally[c] = 0
+
+        # go through each ballot and count highest preference votes
+        for b in ballots:
+            if len(b) < 1:
+                if round == 0:
+                    invalid_ballots += 1
+                else:
+                    exhausted_ballots += 1
+            else:
+                if type(b[0]) is list:
+                    if len([c for c in b[0] if c not in candidates]):
+                        invalid_ballots += 1
+                    else:
+                        for c in b[0]:
+                            # round_tally[c] += 1
+                            round_tally[c] += 1 / len(b[0])
+                        counted_ballots.append(b)
+                elif b[0] not in candidates:
+                    invalid_ballots += 1
+                else:
+                    counted_ballots.append(b)
+                    round_tally[b[0]] += 1
+
+        # determine which candidates have been seated
+        elected_candidates.extend([c for c in candidates if round_tally[c] >= quota])
+
+        # reapportion ballots for candidiates elected in this round
+        candidates_to_reapportion = [c for c in elected_candidates if c in candidiates]
